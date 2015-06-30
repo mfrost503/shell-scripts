@@ -11,6 +11,8 @@ get caught with Rick Astley crooning your shame for the whole office to hear.
 It's pretty easy to use, just run `./rick-roll <url-from-your-mischievous-coworker>` and get
 instant feedback on whether or not a Rick Roll attempt is in progress...
 
+You can just copy this file to `/usr/bin` or some other environment path and run it from anywhere,
+or not whatever.
 
 ### Editorial Note
 

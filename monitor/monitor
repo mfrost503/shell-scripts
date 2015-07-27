@@ -1,0 +1,185 @@
+#!/bin/bash
+
+OUPUT_FORMAT="STANDARD"
+while getopts ":u:h:o" opt; do
+    case $opt in
+        u ) USER="$OPTARG"
+        ;;
+        h ) HOST="$OPTARG"
+        ;;
+        o ) OUTPUT_FORMAT="$OPTARG"
+        ;;
+        * ) ;;
+    esac
+done
+
+echo "Connecting to server...."
+####
+# Connect to SSH server
+####
+ssh -t -t "${USER}"@"${HOST}" "$( cat <<'HERE'
+
+####
+# Define the colors
+####
+Color_Off="\033[0m"       # Text Reset
+BRed="\033[1;31m"         # Red
+BGreen="\033[1;32m"       # Green
+BYellow="\033[1;33m"      # Yellow
+echo -e "$BGreen"
+echo "Connected"
+echo -e "$Color_Off"
+
+###
+# Record start time of monitoring
+###
+START=$(date +%s)
+
+###
+# Check for mysql process
+###
+MYSQL=$(ps -edf | grep mysql)
+MYSQL_STATUS=$(echo $MYSQL | grep \/usr\/sbin\/mysql)
+
+###
+# Check for apache process
+###
+APACHE=$(ps -edf | grep apache2)
+APACHE_STATUS=$(echo "$APACHE" | grep \/usr\/sbin\/apache2)
+
+###
+# Get server load and parse
+###
+LOAD=$(uptime)
+NUMBERS=$(echo "$LOAD" | cut -d":" -f5 | tr -d '[[:space:]]')
+FIVE=$(echo "$NUMBERS" | cut -d"," -f1 | tr -d '[[:space:]]')
+TEN=$(echo "$NUMBERS" | cut -d"," -f2 | tr -d '[[:space:]]')
+FIFTEEN=$(echo "$NUMBERS" | cut -d"," -f3 | tr -d '[[:space:]]')
+
+###
+# Get disk usage and parse
+###
+DISK=$(df -l -h | grep \/dev\/vda)
+PERCENT=$(echo $DISK | cut -d" " -f5)
+FS=$(echo $DISK | cut -d" " -f1)
+CAPACITY=$(echo $DISK | cut -d" " -f2)
+USED=$(echo $DISK | cut -d" " -f3)
+REMAINING=$(echo $DISK | cut -d" " -f4)
+
+###
+# Output the results of the check
+###
+if [ "$MYSQL_STATUS" != "" ]; then
+    echo -e "$BGreen"
+    echo "MySQL is Running"
+    echo -e "$Color_Off"
+else
+    echo -e "$BRed"
+    echo "MySQL is not running"
+    echo -e "$Color_Off"
+fi
+
+if [ "$APACHE_STATUS" != "" ]; then
+    echo -e "$BGreen"
+    echo "Apache is Running"
+    echo -e "$Color_Off"
+else
+    echo -e "$BRed"
+    echo "Apache is not running"
+    echo -e "$Color_Off"
+fi
+
+echo ""
+
+if [ $(echo "$FIVE >= 0.00" | bc -l) -eq 1 ] && [ $(echo "$FIVE < 0.51" | bc -l) -eq 1 ]; then
+    echo -e "$BGreen"
+    echo "Five minute load is reasonably low: $FIVE"
+    echo -e "$Color_Off"
+fi
+
+if [ $(echo "$FIVE >= 0.51" | bc -l) -eq 1 ] && [ $(echo "$FIVE < 1.01" | bc -l) -eq 1 ]; then
+    echo -e "$BYellow"
+    echo "Five minute load is running on the high side: $FIVE"
+    echo -e "$Color_Off"
+fi
+
+if [ $(echo "$FIVE >= 1.01" | bc -l) -eq 1 ]; then
+    echo -e "$BRed"
+    echo "Five minute load is running higher than acceptable: $FIVE"
+    echo -e "$Color_Off"
+fi
+
+if [ $(echo "$TEN >= 0.00" | bc -l) -eq 1 ] && [ $(echo "$TEN < 0.51" | bc -l) -eq 1 ]; then
+    echo -e "$BGreen"
+    echo "Ten minute load is reasonably low: $TEN"
+    echo -e "$Color_Off"
+fi
+
+if [ $(echo "$TEN >= 0.51" | bc -l) -eq 1 ] && [ $(echo "$TEN < 1.01" | bc -l) -eq 1 ]; then
+    echo -e "$BYellow"
+    echo "Ten minute load is running on the high side: $TEN"
+    echo -e "$Color_Off"
+fi
+
+if [ $(echo "$TEN >= 1.01" | bc -l) -eq 1 ]; then
+    echo -e "$BRed"
+    echo "Ten minute load is running higher than acceptable: $TEN"
+    echo -e "$Color_Off"
+fi
+
+if [ $(echo "$FIFTEEN >= 0.00" | bc -l) -eq 1 ] && [ $(echo "$FIFTEEN < 0.51" | bc -l) -eq 1 ]; then
+    echo -e "$BGreen"
+    echo "Fifteen minute load is reasonably low: $FIFTEEN"
+    echo -e "$Color_Off"
+fi
+
+if [ $(echo "$FIFTEEN >= 0.51" | bc -l) -eq 1 ] && [ $(echo "$FIFTEEN < 1.01" | bc -l) -eq 1 ]; then
+    echo -e "$BYellow"
+    echo -e "$BYellow Fifteen minute load is running on the high side: $FIFTEEN $Color_Off"
+    echo -e "$Color_Off"
+fi
+
+if [ $(echo "$FIFTEEN >= 1.01" | bc -l) -eq 1 ]; then
+    echo -e "$BRed"
+    echo "Fifteen minute load is running higher than acceptable: $FIFTEEN"
+    echo -e "$Color_Off"
+fi
+
+####
+# The usage string into an integer
+####
+PERCENT_FORMAT=$(echo $PERCENT | cut -d'%' -f1 | bc -l)
+
+echo "DISK USAGE SUMMARY:"
+
+###
+# Output color alerts for disk usage
+###
+if [ $PERCENT_FORMAT -lt 60 ]; then
+    echo -e "$BGreen"
+fi
+
+if [ $PERCENT_FORMAT -lt 80 ] && [ $PERCENT_FORMAT -gt 60 ]; then
+    echo -e "$BYellow"
+fi
+
+if [ $PERCENT_FORMAT -gt 80 ]; then
+    echo -e "$BRed"
+fi
+
+echo "Total Capacity: $CAPACITY"
+echo "Total Usage: $USED"
+echo "Total Remaining: $REMAINING"
+echo "Percentage Used: $PERCENT"
+echo "On disk: $FS"
+echo ""
+
+###
+# Record the end of monitoring
+###
+END=$(date +%s)
+DURATION=$(echo "$END - $START" | bc -l)
+echo "Monitoring check executed in: $DURATION seconds"
+HERE
+)"
+
